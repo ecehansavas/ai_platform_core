@@ -6,6 +6,7 @@ from skmultiflow.lazy import KNNClassifier
 from skmultiflow.evaluation import EvaluatePrequential
 from skmultiflow.evaluation import EvaluateHoldout
 from sklearn.cluster import KMeans
+from sklearn import metrics
 import numpy as np
 import psycopg2
 import os
@@ -46,59 +47,44 @@ class AIJob:
             data_summary = pd.read_csv(used_dataset).describe().to_json()
             data_length =len(pd.read_csv(used_dataset))
             print("data length: ", data_length)
-            
-            if(self.dataset_name =="kdd99_full_labeled-text"):
-                categories = ["icmp", "tcp", "udp", "auth","bgp", "courier","csnet_cs","ctf","daytime","discard","domain","domain_u","echo","eco_i",
-            "ecr_i","efs","exec","finger","ftp","ftp_data","gopher","hostnames", "http","http_443","imap4","IRC","iso_tsap","klogin"]
-            else: 
-                categories=[]
+            stream = FileStream(used_dataset,allow_nan=True)  
 
-            stream = FileStream(used_dataset, cat_features=categories,allow_nan=True)
-        # stream.prepare_for_use()    
-
-        if self.algorithm_name == "hoeffding_tree_basic":
-            basic_result = run_hoeffdingtree_basic(getFile(self.id),stream, self.algorithm_params, self.id, self.dataset_params)
-            if(os.path.isfile(getFile(self.id))):
-                with open(getFile(self.id)) as file: 
-                    out = readAndParseResults(file)
-            else:
-                out = json.dumps(basic_result)
-        elif self.algorithm_name == "hoeffding_tree_prequential":
-            basic_result = run_hoeffdingtree_prequential(getFile(self.id),stream, self.algorithm_params, self.id, self.dataset_params)
+        if self.algorithm_name == "hoeffding_tree":
+            basic_result = run_hoeffdingtree(getFile(self.id),stream, self.algorithm_params, self.id, self.dataset_params)
             if(os.path.isfile(getFile(self.id))):
                 with open(getFile(self.id)) as file: 
                     out = readAndParseResults(file)
             else:
                 out = json.dumps(basic_result)
 
-        elif self.algorithm_name == "hoeffding_tree_holdout":
-            basic_result = run_hoeffdingtree_holdout(getFile(self.id),stream, self.algorithm_params, self.id, self.dataset_params)
-            if(os.path.isfile(getFile(self.id))):
-                with open(getFile(self.id)) as file: 
-                    out = readAndParseResults(file)
-            else:
-                out = json.dumps(basic_result)
-        
-        elif self.algorithm_name =="knn":
-            # if('start_value' in self.dataset_params and 'stop_value' in self.dataset_params): 
-            #     sample_size = int(self.dataset_params['stop_value']) - int(self.dataset_params['start_value'])
+            # Prequential
+            # basic_result = run_hoeffdingtree_prequential(getFile(self.id),stream, self.algorithm_params, self.id, self.dataset_params)
+            # if(os.path.isfile(getFile(self.id))):
+            #    with open(getFile(self.id)) as file: 
+            #        out = readAndParseResults(file)
             # else:
-            #     sample_size = data_length
-            sample_size = 1000
+            #    out = json.dumps(basic_result)    
+
+        elif self.algorithm_name =="knn":
+            if('start_value' in self.dataset_params and 'stop_value' in self.dataset_params): 
+                sample_size = int(self.dataset_params['stop_value']) - int(self.dataset_params['start_value'])
+            else:
+                sample_size = 1000
                 
             knn_result = run_knn(getFile(self.id),stream, headers, sample_size, self.algorithm_params, self.id) 
             out = knn_result.to_json(orient='records')       
 
         elif self.algorithm_name == "k_means":
-            kmeans_result = run_kmeans(used_dataset, self.algorithm_params)
+            found_labels, purity = run_kmeans(used_dataset, self.algorithm_params)
             data = pd.read_csv(self.dataset_name+".csv")
             if('start_value' in self.dataset_params and 'stop_value'in self.dataset_params):
                 sub_data = data[int(self.dataset_params['start_value']):int(self.dataset_params['stop_value'])]
             else:
                 sub_data=data
-            res = sub_data.merge(pd.Series(kmeans_result).rename('cluster'), left_index=True, right_index=True)
-            out = res.to_json(orient='records')
-        
+            res = sub_data.merge(pd.Series(found_labels).rename('cluster'), left_index=True, right_index=True)
+            out = {'data': res.to_dict(orient='records'), 'purity': purity}
+            out = json.dumps(out)
+           
         elif self.algorithm_name == "d3":
             d3_result = run_d3(used_dataset, self.algorithm_params, self.id)
             out = json.dumps( d3_result) 
@@ -161,11 +147,25 @@ def run_kmeans(dataset_name, algo_params):
             init='k-means++', 
             max_iter = int(algo_params['max_iter']), 
             n_init = int(algo_params['n_init']))
-    return kmeans.fit_predict(data.values)
+
+    # electricity data["class"]
+    # kdd cup data["label"]
+    
+    y_col_name = "label"
+    if not y_col_name in data.columns:
+        y_col_name = "class"
+
+    prediction = kmeans.fit_predict(data.values)
+    contingency_matrix = metrics.cluster.contingency_matrix(data[y_col_name], prediction)
+    # return purity
+    purity = round(np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix),4)
+    print("Purr: "+str( purity))
+
+    return prediction, purity
 
 
 def run_knn(resultFile, stream,headers, sample_size, algo_params, jobid):
-    pretrain_size = int(algo_params['pretrain_size'])
+    pretrain_size = 200
     neighbors = int(algo_params['neighbors'])
     max_window_size = int(algo_params['max_window_size'])
     leaf_size = int(algo_params['leaf_size'])
@@ -211,7 +211,7 @@ def run_knn(resultFile, stream,headers, sample_size, algo_params, jobid):
             correctness.insert(n_samples, 0)
        
         try:
-            accuracy = round((corrects / (n_samples+1)),2)
+            accuracy = round((corrects / (n_samples+1)),4)
             #print('{} KNN samples analyzed '.format(n_samples) + ' accuracy: {}' .format(accuracy))
         except ZeroDivisionError:
             accuracy = 0
@@ -240,102 +240,58 @@ def run_knn(resultFile, stream,headers, sample_size, algo_params, jobid):
     
     return pd.DataFrame(data=result, columns=headers)
 
-def run_hoeffdingtree_basic(resultFile,stream,algo_params, jobid, dataset_params):
+def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
     ht = HoeffdingTree(grace_period = int(algo_params['grace_period']),
                       tie_threshold = float(algo_params['tie_threshold']),   
-                      binary_split = bool(algo_params['binary_split']),
-                      remove_poor_atts = bool(algo_params['remove_poor_atts']),
-                      no_preprune = bool(algo_params['no_preprune']),
-                      leaf_prediction = str(algo_params['leaf_prediction']),
                       nb_threshold = int(algo_params['nb_threshold']))
 
     print("Algo params: " + json.dumps(algo_params))
    
  
-    print("Basic evaluation")
+    print("Hoeffding tree with interleaved test and train")
     # https://scikit-multiflow.readthedocs.io/en/stable/api/generated/skmultiflow.trees.HoeffdingTreeClassifier.html?highlight=hoeffding
     n_samples = 0
     correct_cnt = 0
     
-    max_samples =  int(algo_params['max_sample'])
+    max_samples =  1000
     
     # Train the estimator with the samples provided by the data stream
     while n_samples < max_samples and stream.has_more_samples():
-        time.sleep(0.1)
         X, y = stream.next_sample()
         y_pred = ht.predict(X)
         if y[0] == y_pred[0]:
             correct_cnt += 1
         ht = ht.partial_fit(X, y)
         try:
-            print('{} samples analyzed.'.format(n_samples))
-            accuracy =  round((correct_cnt / n_samples),2)
-            print('Hoeffding Tree accuracy: {}'.format(correct_cnt / n_samples))
+           #  print('{} samples analyzed.'.format(n_samples))
+            accuracy =  round((correct_cnt / n_samples),4)
+           # print('Hoeffding Tree accuracy: {}'.format(correct_cnt / n_samples))
             progress = {}
             progress["n_samples"] = n_samples
             progress["correct_cnt"] = correct_cnt
             progress["accuracy"] = accuracy
             append_progress(jobid, progress)
         except ZeroDivisionError:
-            print("0")
+            print("0 division")
         
         n_samples += 1
     
     return progress
 
-def run_hoeffdingtree_holdout(resultFile,stream,algo_params, jobid, dataset_params):
-    ht = HoeffdingTree(grace_period = int(algo_params['grace_period']),
-                      tie_threshold = float(algo_params['tie_threshold']),   
-                      binary_split = bool(algo_params['binary_split']),
-                      remove_poor_atts = bool(algo_params['remove_poor_atts']),
-                      no_preprune = bool(algo_params['no_preprune']),
-                      leaf_prediction = str(algo_params['leaf_prediction']),
-                      nb_threshold = int(algo_params['nb_threshold']))
-
-    print("Algo params: " + json.dumps(algo_params))
-   
-  
-    evaluator = EvaluateHoldout(show_plot = False,
-                                max_samples = int(algo_params['max_sample']),
-                                n_wait = int(algo_params['n_wait']),
-                                batch_size = int(algo_params['batch_size']),
-                                metrics = ['accuracy', 'kappa'],
-                                output_file = resultFile)
-    evaluator.evaluate(stream=stream, model=ht)
-
-    print("evaluate with max sample:" + str(algo_params['max_sample']) + 
-            " batch size:" + str(algo_params['batch_size']) +
-            "n_wait:" + str(algo_params['n_wait']))
-
-    evaluator.evaluate(stream=stream, model=ht)
 
 def run_hoeffdingtree_prequential(resultFile,stream,algo_params, jobid, dataset_params):
     ht = HoeffdingTree(grace_period = int(algo_params['grace_period']),
                       tie_threshold = float(algo_params['tie_threshold']),   
-                      binary_split = bool(algo_params['binary_split']),
-                      remove_poor_atts = bool(algo_params['remove_poor_atts']),
-                      no_preprune = bool(algo_params['no_preprune']),
-                      leaf_prediction = str(algo_params['leaf_prediction']),
                       nb_threshold = int(algo_params['nb_threshold']))
 
     print("Algo params: " + json.dumps(algo_params))
    
-    evaluator = EvaluatePrequential(show_plot = False,
-                                    pretrain_size = int(algo_params['pretrain_size']),
-                                    max_samples = int(algo_params['max_sample']),
-                                    batch_size = int(algo_params['batch_size']),
-                                    n_wait = int(algo_params['n_wait']),
-                                    metrics = ['accuracy', 'kappa','true_vs_predicted'],
+    evaluator = EvaluatePrequential(metrics = ['accuracy', 'kappa','true_vs_predicted'],
                                     output_file = resultFile)
-
-    print("evaluate with pretrain size:" + str(algo_params['pretrain_size']) + 
-            " max sample:" + str(algo_params['max_sample']) + 
-            " batch size:" + str(algo_params['batch_size']) +
-            "n_wait:" + str(algo_params['n_wait']))
 
     evaluator.evaluate(stream=stream, model=ht)
 
-    
+
 # eren: explain how do we handle the D3 algorithm
 def run_d3(dataset_name,algo_params, jobid):
     print("Running D3 algorithm with dataset " + dataset_name)
@@ -413,9 +369,9 @@ def run_clustream(dataset_name,algo_params,jobid, data_length):
     labels.to_csv(lfname, index=False, header=None)
 
     results = []
-    
+   
     try:
-        process = subprocess.Popen(['Rscript', "ai_core/run-CluStream.r", xfname, lfname, str(algo_params['class']), str(algo_params['horizon']), str(algo_params['m']), str(algo_params['part_size']), str(data_length)], stdout=PIPE)
+        process = subprocess.Popen(['Rscript', "ai_core/run-CluStream.r", xfname, lfname, str(algo_params['class']), str(algo_params['horizon']), str(algo_params['m']), str(data_length)], stdout=PIPE)
         # "<ACCURACY_START>",si, ":", si+part_size-1, "datalength:", data_length, "acc", ari, "meanacc",mean(na.omit(aris)), "time", total_time,"<ACCURACY_END>\n"
         accuracy_pattern = re.compile("<ACCURACY_START> (.*) : (.*) datalength: (.*) acc (.*) pur (.*) meanpur (.*) meanacc (.*) time (.*) <ACCURACY_END>")
             
@@ -430,11 +386,11 @@ def run_clustream(dataset_name,algo_params,jobid, data_length):
                     item["start_index"] = search_results.group(1)
                     item["stop_index"] = search_results.group(2)
                     datalength = int(search_results.group(3))
-                    item["percentage"] = round(int(search_results.group(2))/int(datalength),2)
-                    item["accuracy"] = round(float(search_results.group(4)),4)
+                    item["percentage"] = round(float(search_results.group(2))/float(datalength),2)
+                    item["ari"] = round(float(search_results.group(4)),4)
                     item["purity"] = round(float(search_results.group(5)),4)
                     item["mean_purity"] = round(float(search_results.group(6)),4)
-                    item["mean_accuracy"] = round(float(search_results.group(7)),4)
+                    item["mean_ari"] = round(float(search_results.group(7)),4)
                     item["time"] = search_results.group(8)
                     # print("received and parsed item: ", item)                 
                     append_progress(jobid, item)
@@ -472,7 +428,7 @@ def run_denstream(dataset_name,algo_params, jobid, data_length):
     results = []
     
     try:
-        process = subprocess.Popen(['Rscript', "ai_core/run-DenStream.r", xfname, lfname, str(algo_params['class']), str(algo_params['epsilon']), str(algo_params['part_size']), str(data_length)], stdout=PIPE, stderr=PIPE)
+        process = subprocess.Popen(['Rscript', "ai_core/run-DenStream.r", xfname, lfname, str(algo_params['class']), str(algo_params['epsilon']), str(algo_params['outlier_threshold']), str(data_length)], stdout=PIPE, stderr=PIPE)
          # "<ACCURACY_START>",si, ":", si+part_size-1, "datalength:", data_length, "acc", ari, "meanacc",mean(na.omit(aris)), "time", total_time,"<ACCURACY_END>\n"
         accuracy_pattern = re.compile("<ACCURACY_START> (.*) : (.*) datalength: (.*) acc (.*) pur (.*) meanpur (.*) meanacc (.*) time (.*) <ACCURACY_END>")
             
@@ -488,11 +444,11 @@ def run_denstream(dataset_name,algo_params, jobid, data_length):
                     item["start_index"] = search_results.group(1)
                     item["stop_index"] = search_results.group(2)
                     datalength = int(search_results.group(3))
-                    item["percentage"] = round(int(search_results.group(2))/int(datalength),2)
-                    item["accuracy"] = round(float(search_results.group(4)),4)
+                    item["percentage"] = round(float(search_results.group(2))/float(datalength),2)
+                    item["ari"] = round(float(search_results.group(4)),4)
                     item["purity"] = round(float(search_results.group(5)),4)
                     item["mean_purity"] = round(float(search_results.group(6)),4)
-                    item["mean_accuracy"] = round(float(search_results.group(7)),4)
+                    item["mean_ari"] = round(float(search_results.group(7)),4)
                     item["time"] = search_results.group(8)
                     # print("received and parsed item: ", item)                 
                     append_progress(jobid, item)
@@ -532,7 +488,7 @@ def run_streamkm(dataset_name,algo_params, jobid, data_length):
     results = []
 
     try:
-        process = subprocess.Popen(['Rscript', "ai_core/run-StreamKm.r", xfname, lfname, str(algo_params['part_size']), str(algo_params['n_cluster']), str(algo_params['size_coreset']), str(data_length)], stdout=PIPE)
+        process = subprocess.Popen(['Rscript', "ai_core/run-StreamKm.r", xfname, lfname, str(algo_params['n_cluster']), str(algo_params['size_coreset']), str(data_length)], stdout=PIPE)
          # "<ACCURACY_START>",si, ":", si+part_size-1, "datalength:", data_length, "acc", ari, "meanacc",mean(na.omit(aris)), "time", total_time,"<ACCURACY_END>\n"
         accuracy_pattern = re.compile("<ACCURACY_START> (.*) : (.*) datalength: (.*) acc (.*) pur (.*) meanpur (.*) meanacc (.*) time (.*) <ACCURACY_END>")
             
@@ -547,11 +503,11 @@ def run_streamkm(dataset_name,algo_params, jobid, data_length):
                     item["start_index"] = search_results.group(1)
                     item["stop_index"] = search_results.group(2)
                     datalength = int(search_results.group(3))
-                    item["percentage"] = round(int(search_results.group(2))/int(datalength),2)
-                    item["accuracy"] = round(float(search_results.group(4)),4)
+                    item["percentage"] = round(float(search_results.group(2))/float(datalength),2)
+                    item["ari"] = round(float(search_results.group(4)),4)
                     item["purity"] = round(float(search_results.group(5)),4)
                     item["mean_purity"] = round(float(search_results.group(6)),4)
-                    item["mean_accuracy"] = round(float(search_results.group(7)),4)
+                    item["mean_ari"] = round(float(search_results.group(7)),4)
                     item["time"] = search_results.group(8)             
                     append_progress(jobid, item)
                     results.append(item)

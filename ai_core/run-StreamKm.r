@@ -9,10 +9,10 @@ args<-commandArgs(TRUE)
 
 xfname = args[1] # data except labels
 lfname = args[2] # labels
-part_size =  as.numeric(args[3]) # data process size
-k = as.numeric(args[4])
-sizeCoreset = as.numeric(args[5])
-data_length =  as.numeric(args[6])
+part_size =  1000# data process size
+k = as.numeric(args[3])
+sizeCoreset = as.numeric(args[4])
+data_length =  as.numeric(args[5])
 
 part_start_indexes = seq(1, (data_length-part_size+1), by=part_size)
 cat(part_start_indexes,"\n")

@@ -11,7 +11,8 @@ xfname = args[1]
 lfname = args[2]
 k = as.numeric(args[3])
 epsilon = as.numeric(args[4])
-part_size =  as.numeric(args[5]) # data process size
+beta = as.numeric(args[5])
+part_size =  1000 # data process size
 data_length = as.numeric(args[6])
 
 Sys.time()
@@ -21,17 +22,10 @@ X = read.table(xfname, sep=",")
 lbls = read.table(lfname)
 lbls = t(lbls)
 streammem = DSD_Memory(x=X, class=lbls, description="memo desc", loop=TRUE)
-denstream = DSC_DenStream(epsilon=epsilon, k=k)
+denstream = DSC_DenStream( epsilon=epsilon, beta=beta, k=k)
 
-# covtype purity vs. lambda
-# denstream = DSC_DenStream(initPoints = 1000, mu=1, epsilon=0.02, processingSpeed=100, beta = 0.2, lambda = 0.25, k=k)
-# covtype purity vs. beta
-#denstream = DSC_DenStream(initPoints = 1000, mu=1, epsilon=0.02, processingSpeed=1000, beta = 0.2, lambda = 0.25, k=k)
+#denstream = DSC_DenStream(initPoints = 1000, epsilon=epsilon, offline=20, lambda = 0.25,beta =beta, mu=10, k=k)
 
-# electricity purity vs. lambda
-# denstream = DSC_DenStream(initPoints = 500, mu=1, epsilon=0.02, processingSpeed=100, beta = 0.2, lambda = 0.25, k=k)
-# electricity purity vs. beta
-# denstream = DSC_DenStream(initPoints = 500, mu=1, epsilon=0.02, processingSpeed=1000, beta = 0.8, lambda = 0.25, k=k)
 
 all_ass = c()
 reset_stream(streammem, pos = 1)
