@@ -66,10 +66,7 @@ class AIJob:
             #    out = json.dumps(basic_result)    
 
         elif self.algorithm_name =="knn":
-            if('start_value' in self.dataset_params and 'stop_value' in self.dataset_params): 
-                sample_size = int(self.dataset_params['stop_value']) - int(self.dataset_params['start_value'])
-            else:
-                sample_size = 1000
+            sample_size = 1000
                 
             knn_result = run_knn(getFile(self.id),stream, headers, sample_size, self.algorithm_params, self.id) 
             out = knn_result.to_json(orient='records')       
@@ -77,10 +74,7 @@ class AIJob:
         elif self.algorithm_name == "k_means":
             found_labels, purity = run_kmeans(used_dataset, self.algorithm_params)
             data = pd.read_csv(self.dataset_name+".csv")
-            if('start_value' in self.dataset_params and 'stop_value'in self.dataset_params):
-                sub_data = data[int(self.dataset_params['start_value']):int(self.dataset_params['stop_value'])]
-            else:
-                sub_data=data
+            sub_data=data
             res = sub_data.merge(pd.Series(found_labels).rename('cluster'), left_index=True, right_index=True)
             out = {'data': res.to_dict(orient='records'), 'purity': purity}
             out = json.dumps(out)
@@ -128,13 +122,7 @@ def seaGenaratorStream(dataset_params):
 
 
 def prepareDataset(dataset, dataset_params):
-    if('start_value' in dataset_params and 'stop_value'in dataset_params):
-        data = pd.read_csv(dataset+".csv")
-        sub_data = data[int(dataset_params['start_value']):int(dataset_params['stop_value'])]
-        sub_data.to_csv("subdata.csv")
-        used_dataset="subdata.csv" # eren: create a sub directory for the job and place this subdata.csv there
-    else: 
-        used_dataset=dataset+".csv"
+    used_dataset=dataset+".csv"
     return used_dataset
 
 # ------------------- END OF DATA PREPARATIONS
@@ -197,7 +185,6 @@ def run_knn(resultFile, stream,headers, sample_size, algo_params, jobid):
     print("Received %d samples after requesting %d samples" % (len(X), sample_size))
 
     while n_samples < len(X):
-        time.sleep(0.1)
         tX = [X[n_samples]]
         tY = [y[n_samples]]
         my_pred = knn.predict(tX)
@@ -253,7 +240,7 @@ def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
     n_samples = 0
     correct_cnt = 0
     
-    max_samples =  1000
+    max_samples =  1000000
     
     # Train the estimator with the samples provided by the data stream
     while n_samples < max_samples and stream.has_more_samples():
@@ -270,7 +257,7 @@ def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
             progress["n_samples"] = n_samples
             progress["correct_cnt"] = correct_cnt
             progress["accuracy"] = accuracy
-            append_progress(jobid, progress)
+         #   append_progress(jobid, progress)
         except ZeroDivisionError:
             print("0 division")
         
