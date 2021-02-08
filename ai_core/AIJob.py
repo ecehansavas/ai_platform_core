@@ -35,17 +35,45 @@ class AIJob:
         headers = ""
         data_summary = {}
 
-        if('noise_percentage' in self.dataset_params): # generated 
-            if(isHyperPlaneGenerator(self.dataset_params)): 
-                stream = hyperPlaneGeneratorStream(self.dataset_params) 
-            else: #sea
-                stream = seaGenaratorStream(self.dataset_params)
+        if self.dataset_name == "sea": # generated 
+            print("sea data generator")
+            stream = seaGenaratorStream(self.dataset_params)
+            X, y = stream.next_sample(12500)
+            stream.restart()
+            df = pd.DataFrame(np.hstack((X,np.array([y]).T)))
+            df.to_csv("sea.csv",index=False)
+            used_dataset="sea.csv"
+            frame = pd.read_csv(used_dataset)
+            headers = (frame).columns.tolist()
+            data_summary = pd.read_csv(used_dataset).describe().to_json()
+            data_length =len(pd.read_csv(used_dataset))
+            print("Dataset name: ", self.dataset_name)
+            print("data length: ", data_length)
+            stream = FileStream(used_dataset,allow_nan=True)  
+
+        elif self.dataset_name =="hyperplane":
+            print("hyperplane generator")
+            stream = hyperPlaneGeneratorStream(self.dataset_params) 
+            stream = seaGenaratorStream(self.dataset_params)
+            X, y = stream.next_sample(12500)
+            stream.restart()
+            df = pd.DataFrame(np.hstack((X,np.array([y]).T)))
+            df.to_csv("hyperplane.csv",index=False)
+            used_dataset="hyperplane.csv"
+            frame = pd.read_csv(used_dataset)
+            headers = (frame).columns.tolist()
+            data_summary = pd.read_csv(used_dataset).describe().to_json()
+            data_length =len(pd.read_csv(used_dataset))
+            print("Dataset name: ", self.dataset_name)
+            print("data length: ", data_length)
+            stream = FileStream(used_dataset,allow_nan=True)  
         else: 
             used_dataset = prepareDataset(self.dataset_name, self.dataset_params)
             frame = pd.read_csv(used_dataset)
             headers = (frame).columns.tolist()
             data_summary = pd.read_csv(used_dataset).describe().to_json()
             data_length =len(pd.read_csv(used_dataset))
+            print("Dataset name: ", self.dataset_name)
             print("data length: ", data_length)
             stream = FileStream(used_dataset,allow_nan=True)  
 
@@ -257,7 +285,7 @@ def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
             progress["n_samples"] = n_samples
             progress["correct_cnt"] = correct_cnt
             progress["accuracy"] = accuracy
-         #   append_progress(jobid, progress)
+            append_progress(jobid, progress)
         except ZeroDivisionError:
             print("0 division")
         
