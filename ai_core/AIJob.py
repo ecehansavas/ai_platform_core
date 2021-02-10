@@ -285,7 +285,8 @@ def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
             progress["n_samples"] = n_samples
             progress["correct_cnt"] = correct_cnt
             progress["accuracy"] = accuracy
-            append_progress(jobid, progress)
+            if n_samples == 0 or n_samples == max_samples - 1 or n_samples % 100 == 0 :
+                append_progress(jobid, progress)
         except ZeroDivisionError:
             print("0 division")
         
