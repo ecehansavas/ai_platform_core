@@ -18,7 +18,7 @@ def main():
     while True:
         cur = conn.cursor()
 
-        # eren: you can create a seperate file for all DB access operations and move all DB actions there. That would clean up the code a lot
+        # TODO: you can create a seperate file for all DB access operations and move all DB actions there. That would clean up the code a lot
         # send a SQL query to see if there's a task in queue
         cur.execute("SELECT id, dataset_name, algorithm_name, state, created_at, started_at, updated_at, finished_at, dataset_params, algorithm_params FROM api_job WHERE state='queued' ORDER BY created_at LIMIT 1")
         result = cur.fetchone()

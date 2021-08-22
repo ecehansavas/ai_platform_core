@@ -36,7 +36,7 @@ class AIJob:
         data_summary = {}
 
         if self.dataset_name == "sea": # generated 
-            print("sea data generator")
+            print("Sea data generator")
             stream = seaGenaratorStream(self.dataset_params)
             X, y = stream.next_sample(12500)
             stream.restart()
@@ -48,11 +48,11 @@ class AIJob:
             data_summary = pd.read_csv(used_dataset).describe().to_json()
             data_length =len(pd.read_csv(used_dataset))
             print("Dataset name: ", self.dataset_name)
-            print("data length: ", data_length)
+            print("Data length: ", data_length)
             stream = FileStream(used_dataset,allow_nan=True)  
 
         elif self.dataset_name =="hyperplane":
-            print("hyperplane generator")
+            print("Hyperplane generator")
             stream = hyperPlaneGeneratorStream(self.dataset_params) 
             stream = seaGenaratorStream(self.dataset_params)
             X, y = stream.next_sample(12500)
@@ -65,7 +65,7 @@ class AIJob:
             data_summary = pd.read_csv(used_dataset).describe().to_json()
             data_length =len(pd.read_csv(used_dataset))
             print("Dataset name: ", self.dataset_name)
-            print("data length: ", data_length)
+            print("Data length: ", data_length)
             stream = FileStream(used_dataset,allow_nan=True)  
         else: 
             used_dataset = prepareDataset(self.dataset_name, self.dataset_params)
@@ -74,7 +74,7 @@ class AIJob:
             data_summary = pd.read_csv(used_dataset).describe().to_json()
             data_length =len(pd.read_csv(used_dataset))
             print("Dataset name: ", self.dataset_name)
-            print("data length: ", data_length)
+            print("Data length: ", data_length)
             stream = FileStream(used_dataset,allow_nan=True)  
 
         if self.algorithm_name == "hoeffding_tree":
@@ -124,7 +124,7 @@ class AIJob:
             out = json.dumps(streamkm_result) 
             
         else:
-            print("algorithm not found")
+            print("Algorithm not found")
 
         return out, data_summary
 
@@ -134,6 +134,7 @@ class AIJob:
 def isHyperPlaneGenerator(dataset_params):
     return ('n_drift_features' in dataset_params) #hyperplane
 
+# Generates data stream using hyperplane generator with the given parameters
 def hyperPlaneGeneratorStream(dataset_params):
      return HyperplaneGenerator(random_state = None, 
                                 n_features = int(dataset_params['n_features']), 
@@ -142,13 +143,14 @@ def hyperPlaneGeneratorStream(dataset_params):
                                 noise_percentage = float(dataset_params['noise_percentage']), 
                                 sigma_percentage = float(dataset_params['sigma_percentage']))
 
+# Generates data stream using sea generator with the given parameters
 def seaGenaratorStream(dataset_params):
     return SEAGenerator(classification_function = 0, 
                         random_state = 50, 
                         balance_classes = False, 
                         noise_percentage = float(dataset_params['noise_percentage']))
 
-
+# Prepares a temp dataset csv file for data stream generators to use them as a predefined dataset
 def prepareDataset(dataset, dataset_params):
     used_dataset=dataset+".csv"
     return used_dataset
@@ -180,7 +182,8 @@ def run_kmeans(dataset_name, algo_params):
     return prediction, purity
 
 
-def run_knn(resultFile, stream,headers, sample_size, algo_params, jobid):
+# Runs knn algorithm with the given parameter and data stream
+def run_knn(resultFile, stream, headers, sample_size, algo_params, jobid):
     pretrain_size = 200
     neighbors = int(algo_params['neighbors'])
     max_window_size = int(algo_params['max_window_size'])
@@ -260,7 +263,7 @@ def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
                       tie_threshold = float(algo_params['tie_threshold']),   
                       nb_threshold = int(algo_params['nb_threshold']))
 
-    print("Algo params: " + json.dumps(algo_params))
+    print("Hoeffding tree params: " + json.dumps(algo_params))
    
  
     print("Hoeffding tree with interleaved test and train")
@@ -295,12 +298,12 @@ def run_hoeffdingtree(resultFile,stream,algo_params, jobid, dataset_params):
     return progress
 
 
-def run_hoeffdingtree_prequential(resultFile,stream,algo_params, jobid, dataset_params):
+def run_hoeffdingtree_prequential(resultFile, stream, algo_params, jobid, dataset_params):
     ht = HoeffdingTree(grace_period = int(algo_params['grace_period']),
                       tie_threshold = float(algo_params['tie_threshold']),   
                       nb_threshold = int(algo_params['nb_threshold']))
 
-    print("Algo params: " + json.dumps(algo_params))
+    print("Hoeffding tree params: " + json.dumps(algo_params))
    
     evaluator = EvaluatePrequential(metrics = ['accuracy', 'kappa','true_vs_predicted'],
                                     output_file = resultFile)
@@ -309,6 +312,7 @@ def run_hoeffdingtree_prequential(resultFile,stream,algo_params, jobid, dataset_
 
 
 # eren: explain how do we handle the D3 algorithm
+# D3 algorithm run as a subprocess
 def run_d3(dataset_name,algo_params, jobid):
     print("Running D3 algorithm with dataset " + dataset_name)
     print("Algorithm parameters: " + str(algo_params))

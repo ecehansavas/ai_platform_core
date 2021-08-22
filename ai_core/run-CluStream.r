@@ -1,3 +1,8 @@
+#################################################
+# This code is taken from Alaettin Zubaroğlu    #
+# Edited some parts for adapting ESTRA          #
+#################################################
+
 library(rJava)
 library(proxy)
 library(mclust)
@@ -27,7 +32,7 @@ lbls = t(lbls)
 streammem = DSD_Memory(x=X, class=lbls, description="memo desc", loop=TRUE)
 clustream = DSC_CluStream(m=m, horizon=window_length, k=k)
 
-all_ass = c()
+all_assign = c()
 reset_stream(streammem, pos = 1)
 total_time = 0
 aris = c()
@@ -38,25 +43,25 @@ for(si in part_start_indexes)
     begin = Sys.time()
     update(clustream, streammem, part_size)
     
-    ass = get_assignment(clustream, tail(head(X, si+part_size-1), part_size), type = "macro")
-    ass[is.na(ass)] = -1
+    assign = get_assignment(clustream, tail(head(X, si+part_size-1), part_size), type = "macro")
+    assign[is.na(assign)] = -1
    
     end = Sys.time()
     this_time = end - begin
     total_time = total_time + this_time
     real_labels = tail(head(t(lbls), si+part_size-1), part_size)
-    # cat("Found Labels: " , ass, "\n")
+    # cat("Found Labels: " , assign, "\n")
     # cat("Real Labels : " , real_labels, "\n")
-    ari = adjustedRandIndex(ass, real_labels)
-    pur = purity(real_labels, ass)
+    ari = adjustedRandIndex(assign, real_labels)
+    pur = purity(real_labels, assign)
     pur = pur[[1]]
     #cat("Purity : " , pur, "\n")
     purr = c(purr,pur)
-    all_ass = c(all_ass, ass)
+    all_assign = c(all_assign, assign)
     aris = c(aris, ari)
     cat("<ACCURACY_START>",si, ":", si+part_size-1, "datalength:", data_length, "acc", ari, "pur", pur, "meanpur", mean(na.omit(purr)), "meanacc", mean(na.omit(aris)), "time", total_time,"<ACCURACY_END>\n")
 }
 
 #cat("Total Time of this stream : [", total_time, "] seconds, average ari : [", mean(na.omit(aris)), "]\n")
-#total_ari = adjustedRandIndex(all_ass, head(t(lbls), length(all_ass)))
+#total_ari = adjustedRandIndex(all_assign, head(t(lbls), length(all_assign)))
 #cat("Total ari : [", total_ari, "]\n")

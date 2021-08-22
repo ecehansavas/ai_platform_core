@@ -1,3 +1,8 @@
+############################################################################################################
+# This code is taken from: https://github.com/ogozuacik/d3-discriminative-drift-detector-concept-drift/    #
+# Edited some parts for adapting ESTRA                                                                     #
+############################################################################################################
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import StratifiedKFold 
